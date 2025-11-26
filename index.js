@@ -85,6 +85,24 @@ async function run() {
       }
     });
 
+    //? get all the plants from db by calling its api
+    app.get("/plants", async(req,res) => {
+      try {
+        const result = await plantsCollection.find().toArray();
+        res.status(200).json({
+          status: true,
+          message: "Get plants data from db successful",
+          result: result
+        })
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to get plants data",
+          error: error.message
+        })
+      }
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
