@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
@@ -64,11 +64,11 @@ async function run() {
       try {
         const newPlants = req.body;
         //? validate newPlants if not found
-        if(!newPlants || Object.keys(newPlants).length === 0) {
+        if (!newPlants || Object.keys(newPlants).length === 0) {
           return res.status(400).json({
             status: false,
-            message: "Plants data required!!!"
-          })
+            message: "Plants data required!!!",
+          });
         }
         const result = await plantsCollection.insertOne(newPlants);
         res.status(201).json({
@@ -80,28 +80,66 @@ async function run() {
         res.status(500).json({
           status: false,
           message: "Failed to post plants data",
-          error: error.message
-        })
+          error: error.message,
+        });
       }
     });
 
     //? get all the plants from db by calling its api
-    app.get("/plants", async(req,res) => {
+    app.get("/plants", async (req, res) => {
       try {
         const result = await plantsCollection.find().toArray();
         res.status(200).json({
           status: true,
           message: "Get plants data from db successful",
-          result: result
-        })
+          result: result,
+        });
       } catch (error) {
         res.status(500).json({
           status: false,
           message: "Failed to get plants data",
+          error: error.message,
+        });
+      }
+    });
+
+    //? get single plant data by calling api with id
+    app.get("/plants/:id", async (req, res) => {
+      try {
+        const plantId = req.params.id;
+
+        //? checking valid Object id or not
+        if(!ObjectId.isValid(plantId)) {
+          return res.status(400).json({
+            status: false,
+            message: "Invalid Plant id"
+          })
+        }
+
+        const query = { _id: new ObjectId(plantId) };
+        const result = await plantsCollection.findOne(query);
+
+        //? checking result is available or not
+        if(!result) {
+          return res.status(404).json({
+            status: false,
+            message: "plant not found"
+          })
+        }
+        
+        res.status(200).json({
+          status: true,
+          message: "Get single plant data from db successful",
+          result
+        });
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to get single plant data from db",
           error: error.message
         })
       }
-    })
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
