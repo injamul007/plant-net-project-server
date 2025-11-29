@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(`${process.env.STRIPE_SECRET_KEY}`);
 const admin = require("firebase-admin");
 const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
@@ -16,11 +17,7 @@ const app = express();
 // middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "https://b12-m11-session.web.app",
-    ],
+    origin: [process.env.CLIENT_DOMAIN_URL],
     credentials: true,
     optionSuccessStatus: 200,
   })
@@ -109,35 +106,93 @@ async function run() {
         const plantId = req.params.id;
 
         //? checking valid Object id or not
-        if(!ObjectId.isValid(plantId)) {
+        if (!ObjectId.isValid(plantId)) {
           return res.status(400).json({
             status: false,
-            message: "Invalid Plant id"
-          })
+            message: "Invalid Plant id",
+          });
         }
 
         const query = { _id: new ObjectId(plantId) };
         const result = await plantsCollection.findOne(query);
 
         //? checking result is available or not
-        if(!result) {
+        if (!result) {
           return res.status(404).json({
             status: false,
-            message: "plant not found"
-          })
+            message: "plant not found",
+          });
         }
-        
+
         res.status(200).json({
           status: true,
           message: "Get single plant data from db successful",
-          result
+          result,
         });
       } catch (error) {
         res.status(500).json({
           status: false,
           message: "Failed to get single plant data from db",
-          error: error.message
-        })
+          error: error.message,
+        });
+      }
+    });
+
+    //? Stripe Payment endpoint api setup
+    app.post("/create-checkout-session", async (req, res) => {
+      try {
+        const paymentInfo = req.body;
+        // console.log(paymentInfo);
+        
+        //? convert this value in Number()
+        const price = Number(paymentInfo?.price);
+        //? validate price with isNaN
+        if (isNaN(price) || price <= 0) {
+          return res.status(400).json({
+            status: false,
+            message: "Invalid number",
+          });
+        }
+        //? convert this last value to us cents-->
+        const unitFinalPrice = Math.round(price * 100);
+        const session = await stripe.checkout.sessions.create({
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: paymentInfo?.name,
+                  description: paymentInfo?.description,
+                  images: paymentInfo?.image ? [paymentInfo?.image] : undefined,
+                },
+                unit_amount: unitFinalPrice,
+              },
+              quantity: 1,
+            },
+          ],
+          customer_email: paymentInfo?.customer?.email || undefined,
+          mode: "payment",
+          metadata: {
+            plantId: paymentInfo?.plantId || "",
+            customer_name: paymentInfo?.customer?.name || undefined,
+            customer_email: paymentInfo?.customer?.email || undefined,
+          },
+          success_url: `${process.env.CLIENT_DOMAIN_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.CLIENT_DOMAIN_URL}/plant/${paymentInfo?.plantId}`,
+        });
+        console.log(session)
+        res.status(201).json({
+          status: true,
+          message: "Stripe payment session created successful",
+          url: session.url,
+        });
+      } catch (error) {
+        console.log(error.message);
+        res.status(500).json({
+          status: false,
+          message: "Stripe Payment creation failed",
+          error: error.message,
+        });
       }
     });
 
