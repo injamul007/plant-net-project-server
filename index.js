@@ -299,7 +299,7 @@ async function run() {
       }
     });
 
-    //? get all the product added by seller by seller email
+    //? get all the product added by seller by seller email from payment orders
     app.get("/seller-product-orders", async (req, res) => {
       try {
         const email = req.query.email;
@@ -310,7 +310,8 @@ async function run() {
         const result = await ordersCollection.find(query).toArray();
         res.status(200).json({
           status: true,
-          message: "Get all the seller product orders by email query successful",
+          message:
+            "Get all the seller product orders by email query successful",
           result,
         });
       } catch (error) {
@@ -318,7 +319,31 @@ async function run() {
           status: false,
           message: "Failed to get all the seller product orders by email",
           error: error.message,
-        })
+        });
+      }
+    });
+
+    //? get all the product added by seller by seller email
+    app.get("/my-inventory", async (req, res) => {
+      try {
+        const email = req.query.email;
+        const query = {};
+        if (email) {
+          query["seller.email"] = email;
+        }
+        const result = await plantsCollection.find(query).toArray();
+        res.status(200).json({
+          status: true,
+          message:
+            "Get all the seller product added by seller email query successful",
+          result,
+        });
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to get all the seller product added by email",
+          error: error.message,
+        });
       }
     });
 
