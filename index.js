@@ -55,6 +55,7 @@ async function run() {
     //? Database and collection setup
     const db = client.db("plantnetDB");
     const plantsCollection = db.collection("plants");
+    const ordersCollection = db.collection("orders");
 
     //? post api for posting plants in the db
     app.post("/plants", async (req, res) => {
@@ -143,7 +144,7 @@ async function run() {
       try {
         const paymentInfo = req.body;
         // console.log(paymentInfo);
-        
+
         //? convert this value in Number()
         const price = Number(paymentInfo?.price);
         //? validate price with isNaN
@@ -180,17 +181,93 @@ async function run() {
           success_url: `${process.env.CLIENT_DOMAIN_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${process.env.CLIENT_DOMAIN_URL}/plant/${paymentInfo?.plantId}`,
         });
-        console.log(session)
+        // console.log(session)
+        // console.log(session.id)
+        // console.log(session.payment_status)
         res.status(201).json({
           status: true,
           message: "Stripe payment session created successful",
           url: session.url,
+          id: session.id,
         });
       } catch (error) {
         console.log(error.message);
         res.status(500).json({
           status: false,
           message: "Stripe Payment creation failed",
+          error: error.message,
+        });
+      }
+    });
+
+    //? Session id api create endpoint
+    app.post("/payment-success", async (req, res) => {
+      try {
+        const sessionId = req.body.sessionId;
+        // console.log(sessionId);
+
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        console.log("session retrieve-->", session);
+        //? getting single plant data from db
+        const plant = await plantsCollection.findOne({
+          _id: new ObjectId(session?.metadata?.plantId),
+        });
+
+        //? validate plant data from db
+        if (!plant) {
+          return res.status(404).json({
+            status: false,
+            message: "Plant not found",
+          });
+        }
+
+        const order = await ordersCollection.findOne({
+          transactionId: session?.payment_intent,
+        });
+
+        if (!order) {
+          if (session?.payment_status !== "paid") {
+            return res.status(400).json({
+              status: false,
+              message: "Payment Not Complete",
+            });
+          } else {
+            const orderInfo = {
+              plantId: session?.metadata?.plantId,
+              transactionId: session?.payment_intent,
+              customer_email: session?.customer_email,
+              status: "pending",
+              seller: plant?.seller,
+              name: plant?.name,
+              category: plant?.category,
+              quantity: 1,
+              price: session?.amount_total / 100,
+            };
+            console.log(orderInfo);
+            const result = await ordersCollection.insertOne(orderInfo);
+
+            //? update plant quantity
+            await plantsCollection.updateOne({
+              _id: new ObjectId(session?.metadata?.plantId)
+            }, {$inc: {quantity: -1}})
+
+            res.status(201).json({
+              status: true,
+              message: "Order created Successfully",
+              result,
+              plant,
+            })
+          }
+        } else {
+          return res.status(409).json({
+            status: false,
+            message: "Order already exists",
+          });
+        }
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to create payment success api data",
           error: error.message,
         });
       }
