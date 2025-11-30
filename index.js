@@ -247,16 +247,19 @@ async function run() {
             const result = await ordersCollection.insertOne(orderInfo);
 
             //? update plant quantity
-            await plantsCollection.updateOne({
-              _id: new ObjectId(session?.metadata?.plantId)
-            }, {$inc: {quantity: -1}})
+            await plantsCollection.updateOne(
+              {
+                _id: new ObjectId(session?.metadata?.plantId),
+              },
+              { $inc: { quantity: -1 } }
+            );
 
             res.status(201).json({
               status: true,
               message: "Order created Successfully",
               result,
               plant,
-            })
+            });
           }
         } else {
           return res.status(409).json({
@@ -270,6 +273,29 @@ async function run() {
           message: "Failed to create payment success api data",
           error: error.message,
         });
+      }
+    });
+
+    //? get all the orders for a customer by email query
+    app.get("/my-orders", async (req, res) => {
+      try {
+        const email = req.query.email;
+        const query = {};
+        if (email) {
+          query.customer_email = email;
+        }
+        const result = await ordersCollection.find(query).toArray();
+        res.status(200).json({
+          status: true,
+          message: "Get all the customer order by email query successful",
+          result,
+        });
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to get all the customer orders by email",
+          error: error.message,
+        })
       }
     });
 
