@@ -239,6 +239,7 @@ async function run() {
               status: "pending",
               seller: plant?.seller,
               name: plant?.name,
+              image: plant?.image,
               category: plant?.category,
               quantity: 1,
               price: session?.amount_total / 100,
