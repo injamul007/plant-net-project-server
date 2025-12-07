@@ -57,6 +57,7 @@ async function run() {
     const plantsCollection = db.collection("plants");
     const ordersCollection = db.collection("orders");
     const usersCollection = db.collection("users");
+    const sellerRequestCollection = db.collection("sellerRequest")
 
     //? save or update a user in db
     app.post("/users", async (req, res) => {
@@ -416,6 +417,34 @@ async function run() {
         });
       }
     });
+
+    //? save become-seller request
+    app.post("/become-seller", verifyJWT, async(req,res) => {
+      try {
+        const email = req.tokenEmail
+
+        const existingEmail = await sellerRequestCollection.findOne({email})
+        if(existingEmail) {
+          return res.status(409).json({
+            status: false,
+            message: "Already Requested ! Please wait..."
+          })
+        }
+
+        const result = await sellerRequestCollection.insertOne({email})
+        res.status(201).json({
+          status: true,
+          message: "Become seller post created successful",
+          result,
+        })
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to become seller post create",
+          error: error.message,
+        })
+      }
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
