@@ -56,6 +56,56 @@ async function run() {
     const db = client.db("plantnetDB");
     const plantsCollection = db.collection("plants");
     const ordersCollection = db.collection("orders");
+    const usersCollection = db.collection("users");
+
+    //? save or update a user in db
+    app.post("/users", async (req, res) => {
+      try {
+        const userData = req.body;
+
+        //? validate user email and name
+        if (!userData?.email || !userData?.name) {
+          return res.status(400).json({
+            status: false,
+            message: "User email and name is Required",
+          });
+        }
+        
+        userData.created_At = new Date();
+        userData.last_loggedIn = new Date();
+        userData.role = "customer"
+        
+        const query = {email: userData.email}
+        const existingUser = await usersCollection.findOne(query)
+        if(existingUser) {
+          const update = {
+            $set: {
+              last_loggedIn: new Date(),
+            }
+          }
+
+          const updateResult = await usersCollection.updateOne(query, update)
+          return res.status(200).json({
+            status: true,
+            message: "User Already Exits and last loggedIn updated",
+            updateResult,
+          })
+        }
+
+        const result = await usersCollection.insertOne(userData);
+        res.status(201).json({
+          status: true,
+          message: "all the users data save in db successful",
+          result,
+        });
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to post users Data in db",
+          error: error.message,
+        })
+      }
+    });
 
     //? post api for posting plants in the db
     app.post("/plants", async (req, res) => {
