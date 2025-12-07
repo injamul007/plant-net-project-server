@@ -70,26 +70,26 @@ async function run() {
             message: "User email and name is Required",
           });
         }
-        
+
         userData.created_At = new Date();
         userData.last_loggedIn = new Date();
-        userData.role = "customer"
-        
-        const query = {email: userData.email}
-        const existingUser = await usersCollection.findOne(query)
-        if(existingUser) {
+        userData.role = "customer";
+
+        const query = { email: userData.email };
+        const existingUser = await usersCollection.findOne(query);
+        if (existingUser) {
           const update = {
             $set: {
               last_loggedIn: new Date(),
-            }
-          }
+            },
+          };
 
-          const updateResult = await usersCollection.updateOne(query, update)
+          const updateResult = await usersCollection.updateOne(query, update);
           return res.status(200).json({
             status: true,
             message: "User Already Exits and last loggedIn updated",
             updateResult,
-          })
+          });
         }
 
         const result = await usersCollection.insertOne(userData);
@@ -102,6 +102,25 @@ async function run() {
         res.status(500).json({
           status: false,
           message: "Failed to post users Data in db",
+          error: error.message,
+        });
+      }
+    });
+
+    app.get("/users/role", verifyJWT, async (req, res) => {
+      try {
+        // const email = req.params.email;
+        const query = { email : req.tokenEmail };
+        const user = await usersCollection.findOne(query);
+        res.status(200).json({
+          status: true,
+          message: "Get the user role by email is successful",
+          role: user?.role || "customer",
+        })
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to get user role by email",
           error: error.message,
         })
       }
@@ -328,13 +347,13 @@ async function run() {
     });
 
     //? get all the orders for a customer by email query
-    app.get("/my-orders", async (req, res) => {
+    app.get("/my-orders", verifyJWT, async (req, res) => {
       try {
-        const email = req.query.email;
-        const query = {};
-        if (email) {
-          query.customer_email = email;
-        }
+        // const email = req.query.email;
+        // const query = {};
+        // if (email) {
+        // }
+        const query = {customer_email: req.tokenEmail}
         const result = await ordersCollection.find(query).toArray();
         res.status(200).json({
           status: true,
