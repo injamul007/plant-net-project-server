@@ -57,7 +57,35 @@ async function run() {
     const plantsCollection = db.collection("plants");
     const ordersCollection = db.collection("orders");
     const usersCollection = db.collection("users");
-    const sellerRequestCollection = db.collection("sellerRequest")
+    const sellerRequestCollection = db.collection("sellerRequest");
+
+    //? verify ADMIN middleware with role
+    const verifyADMIN = async(req,res,next) => {
+      const email = req.tokenEmail
+      const user = await usersCollection.findOne({email})
+
+      if(user?.role !== "admin") {
+        return res.status(403).json({
+          status: false,
+          message: "Admin only Actions!", role: user?.role
+        })
+      }
+      next();
+    }
+
+    //? verify SELLER middleware with role
+    const verifySELLER = async(req,res,next) => {
+      const email = req.tokenEmail
+      const user = await usersCollection.findOne({email})
+
+      if(user?.role !== "seller") {
+        return res.status(403).json({
+          status: false,
+          message: "Seller only Actions!", role: user?.role
+        })
+      }
+      next();
+    }
 
     //? save or update a user in db
     app.post("/users", async (req, res) => {
@@ -111,24 +139,24 @@ async function run() {
     app.get("/users/role", verifyJWT, async (req, res) => {
       try {
         // const email = req.params.email;
-        const query = { email : req.tokenEmail };
+        const query = { email: req.tokenEmail };
         const user = await usersCollection.findOne(query);
         res.status(200).json({
           status: true,
           message: "Get the user role by email is successful",
           role: user?.role || "customer",
-        })
+        });
       } catch (error) {
         res.status(500).json({
           status: false,
           message: "Failed to get user role by email",
           error: error.message,
-        })
+        });
       }
     });
 
     //? post api for posting plants in the db
-    app.post("/plants", async (req, res) => {
+    app.post("/plants", verifyJWT, verifySELLER, async (req, res) => {
       try {
         const newPlants = req.body;
         //? validate newPlants if not found
@@ -354,7 +382,7 @@ async function run() {
         // const query = {};
         // if (email) {
         // }
-        const query = {customer_email: req.tokenEmail}
+        const query = { customer_email: req.tokenEmail };
         const result = await ordersCollection.find(query).toArray();
         res.status(200).json({
           status: true,
@@ -371,9 +399,10 @@ async function run() {
     });
 
     //? get all the product added by seller by seller email from payment orders
-    app.get("/seller-product-orders", async (req, res) => {
+    app.get("/seller-product-orders", verifyJWT, verifySELLER, async (req, res) => {
       try {
-        const email = req.query.email;
+        // const email = req.query.email;
+        const email = req.tokenEmail;
         const query = {};
         if (email) {
           query["seller.email"] = email;
@@ -395,9 +424,10 @@ async function run() {
     });
 
     //? get all the product added by seller by seller email
-    app.get("/my-inventory", async (req, res) => {
+    app.get("/my-inventory", verifyJWT, verifySELLER, async (req, res) => {
       try {
-        const email = req.query.email;
+        // const email = req.query.email;
+        const email = req.tokenEmail;
         const query = {};
         if (email) {
           query["seller.email"] = email;
@@ -419,32 +449,95 @@ async function run() {
     });
 
     //? save become-seller request
-    app.post("/become-seller", verifyJWT, async(req,res) => {
+    app.post("/become-seller", verifyJWT, async (req, res) => {
       try {
-        const email = req.tokenEmail
+        const email = req.tokenEmail;
 
-        const existingEmail = await sellerRequestCollection.findOne({email})
-        if(existingEmail) {
+        const existingEmail = await sellerRequestCollection.findOne({ email });
+        if (existingEmail) {
           return res.status(409).json({
             status: false,
-            message: "Already Requested ! Please wait..."
-          })
+            message: "Already Requested ! Please wait...",
+          });
         }
 
-        const result = await sellerRequestCollection.insertOne({email})
+        const result = await sellerRequestCollection.insertOne({ email });
         res.status(201).json({
           status: true,
           message: "Become seller post created successful",
           result,
-        })
+        });
       } catch (error) {
         res.status(500).json({
           status: false,
           message: "Failed to become seller post create",
           error: error.message,
+        });
+      }
+    });
+
+    //? get all the seller request by email
+    app.get("/seller-requests", verifyJWT, verifyADMIN, async (req, res) => {
+      try {
+        // const email = req.tokenEmail
+        const result = await sellerRequestCollection.find().toArray();
+        res.status(200).json({
+          status: true,
+          message: "Get all the seller request email successful",
+          result,
+        });
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to get all the seller request email",
+          error: error.message,
+        });
+      }
+    });
+
+    //? get all the users to show in manage users in admin panel
+    app.get("/manage-users", verifyJWT, verifyADMIN, async (req, res) => {
+      try {
+        // const email = req.tokenEmail
+        const adminEmail = req.tokenEmail;
+        const query = {email: {$ne: adminEmail}}
+        const result = await usersCollection.find(query).toArray();
+        res.status(200).json({
+          status: true,
+          message: "Get all the users by email successful",
+          result,
+        });
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to get all the users email",
+          error: error.message,
+        });
+      }
+    });
+
+    //? update a user's role
+    app.patch("/update-role", verifyJWT, async (req, res) => {
+      try {
+        const { email, role } = req.body;
+        const result = await usersCollection.updateOne(
+          { email },
+          { $set: { role } }
+        );
+        res.status(200).json({
+          status: true,
+          message: "Update the role",
+          result,
+        });
+        await sellerRequestCollection.deleteOne({ email });
+      } catch (error) {
+        res.status(500).json({
+          status: false,
+          message: "Failed to update and delete the the user request",
+          error: error.message,
         })
       }
-    })
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
